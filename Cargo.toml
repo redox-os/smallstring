@@ -1,6 +1,6 @@
 [package]
 name = "smallstring"
-version = "0.1.0"
+version = "0.1.1"
 authors = ["Jack Fransham <moonfudgeman@hotmail.co.uk>"]
 repository = "https://github.com/redox-os/smallstring"
 description = "'Small string' optimization: store small strings on the stack using smallvec"
