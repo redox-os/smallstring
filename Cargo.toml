@@ -2,6 +2,8 @@
 name = "smallstring"
 version = "0.1.0"
 authors = ["Jack Fransham <moonfudgeman@hotmail.co.uk>"]
+description = "'Small string' optimization: store small strings on the stack using smallvec"
+license = "MIT"
 
 [dependencies]
 smallvec = "0.3"
