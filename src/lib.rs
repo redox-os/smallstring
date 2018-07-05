@@ -1,6 +1,14 @@
 #![cfg_attr(not(feature = "std"), no_std)]
+#![cfg_attr(not(feature = "std"), feature(alloc))]
 
 extern crate smallvec;
+
+#[cfg(not(feature = "std"))]
+extern crate alloc;
+#[cfg(not(feature = "std"))]
+use alloc::Vec;
+#[cfg(not(feature = "std"))]
+use alloc::String;
 
 #[cfg(not(feature = "std"))]
 mod std {
@@ -44,7 +52,6 @@ impl<'a, B: Array<Item = u8>> SmallString<B> {
     }
 
     /// Constructs a new `SmallString` from a `String` without copying elements.
-    #[cfg(feature = "std")]
     pub fn from_string(string: String) -> Self {
         SmallString {
             buffer: SmallVec::from_vec(string.into()),
@@ -174,7 +181,6 @@ impl<'a, B: Array<Item = u8>> SmallString<B> {
     }
 
     /// Consumes the string, turning it into a vector of bytes
-    #[cfg(feature = "std")]
     pub fn into_bytes(self) -> Vec<u8> {
         self.buffer.into_vec()
     }
@@ -456,7 +462,6 @@ impl<'a, B: Array<Item = u8>> From<&'a str> for SmallString<B> {
     }
 }
 
-#[cfg(feature = "std")]
 impl<B: Array<Item = u8>> From<String> for SmallString<B> {
     fn from(s: String) -> Self {
         SmallString {
@@ -465,7 +470,6 @@ impl<B: Array<Item = u8>> From<String> for SmallString<B> {
     }
 }
 
-#[cfg(feature = "std")]
 impl<B: Array<Item = u8>> From<SmallString<B>> for String {
     fn from(s: SmallString<B>) -> String {
         unsafe { String::from_utf8_unchecked(s.buffer.into_vec()) }
