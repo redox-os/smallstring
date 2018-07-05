@@ -1,8 +1,8 @@
 extern crate smallvec;
 
 use std::str;
-use std::mem::transmute;
 use std::ffi::OsStr;
+use std::ptr;
 use std::ops::{Deref, DerefMut};
 use std::borrow::Borrow;
 use std::iter::{FromIterator, IntoIterator};
@@ -203,13 +203,14 @@ impl<B: Array<Item = u8>> DerefMut for SmallString<B> {
         // We only allow `buffer` to be created from an existing valid string,
         // so this is safe.
         unsafe {
-            // we would use this method, but it's Rust 1.20+ only.
-            // str::from_utf8_unchecked_mut(self.buffer.as_mut())
-            // Instead, let's do what String::deref_mut() did before
-            // this method existed:
-            // https://doc.rust-lang.org/1.3.0/src/collections/string.rs.html#1023-1027
-            transmute(self.buffer.as_mut())
+            str::from_utf8_unchecked_mut(self.buffer.as_mut())
         }
+    }
+}
+
+impl<B: Array<Item = u8>> AsRef<[u8]> for SmallString<B> {
+    fn as_ref(&self) -> &[u8] {
+        &self.buffer
     }
 }
 
