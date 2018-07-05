@@ -41,9 +41,7 @@ impl<'a, B: Array<Item = u8>> SmallString<B> {
 
     pub fn from_str(s: &str) -> Self {
         SmallString {
-            buffer: s.as_bytes().into_iter()
-                .cloned()
-                .collect(),
+            buffer: SmallVec::from_slice(s.as_bytes()),
         }
     }
 
@@ -154,12 +152,6 @@ impl<'a, B: Array<Item = u8>> SmallString<B> {
     }
 }
 
-impl<'a, B: Array<Item=u8>> From<&'a str> for SmallString<B> {
-    fn from(s: &str) -> Self {
-        Self::from_str(s)
-    }
-}
-
 impl<B: Array<Item = u8>> std::hash::Hash for SmallString<B> {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         let s: &str = self;
@@ -216,7 +208,7 @@ impl<B: Array<Item = u8>> DerefMut for SmallString<B> {
             // Instead, let's do what String::deref_mut() did before
             // this method existed:
             // https://doc.rust-lang.org/1.3.0/src/collections/string.rs.html#1023-1027
-            std::mem::transmute::<&mut [u8], &mut str>(&mut self.buffer[..])
+            transmute(self.buffer.as_mut())
         }
     }
 }
@@ -259,18 +251,6 @@ impl<B: Array<Item = u8>> FromIterator<char> for SmallString<B> {
         buf
     }
 }
-
-impl AsMut<str> for SmallString {
-    fn as_mut(&mut self) -> &mut str {
-        // We only allow `buffer` to be created from an existing valid string,
-        // so this is safe.
-        unsafe {
-            transmute(self.buffer.as_mut())
-            // str::from_utf8_unchecked_mut(self.buffer.as_mut())
-        }
-    }
-}
-
 
 impl<B: Array<Item = u8>> AsRef<OsStr> for SmallString<B> {
     fn as_ref(&self) -> &OsStr {
