@@ -1,12 +1,22 @@
+#![cfg_attr(not(feature = "std"), no_std)]
+
 extern crate smallvec;
 
+#[cfg(not(feature = "std"))]
+mod std {
+    pub use core::*;
+}
+
 use std::str;
-use std::ffi::OsStr;
 use std::ptr;
 use std::ops::{Deref, DerefMut};
 use std::borrow::Borrow;
 use std::iter::{FromIterator, IntoIterator};
+
 use smallvec::{Array, SmallVec};
+
+#[cfg(feature = "std")]
+use std::ffi::OsStr;
 
 #[derive(Clone, Default)]
 pub struct SmallString<B: Array<Item = u8> = [u8; 8]> {
@@ -33,6 +43,7 @@ impl<'a, B: Array<Item = u8>> SmallString<B> {
     }
 
     /// Constructs a new `SmallString` from a `String` without copying elements.
+    #[cfg(feature = "std")]
     pub fn from_string(string: String) -> Self {
         SmallString {
             buffer: SmallVec::from_vec(string.into()),
@@ -253,6 +264,7 @@ impl<B: Array<Item = u8>> FromIterator<char> for SmallString<B> {
     }
 }
 
+#[cfg(feature = "std")]
 impl<B: Array<Item = u8>> AsRef<OsStr> for SmallString<B> {
     fn as_ref(&self) -> &OsStr {
         let s: &str = self.as_ref();
@@ -274,6 +286,7 @@ impl<'a, B: Array<Item = u8>> From<&'a str> for SmallString<B> {
     }
 }
 
+#[cfg(feature = "std")]
 impl<B: Array<Item = u8>> From<String> for SmallString<B> {
     fn from(s: String) -> Self {
         SmallString {
@@ -282,6 +295,7 @@ impl<B: Array<Item = u8>> From<String> for SmallString<B> {
     }
 }
 
+#[cfg(feature = "std")]
 impl<B: Array<Item = u8>> From<SmallString<B>> for String {
     fn from(s: SmallString<B>) -> String {
         unsafe { String::from_utf8_unchecked(s.buffer.into_vec()) }

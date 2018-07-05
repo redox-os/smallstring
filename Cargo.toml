@@ -6,5 +6,9 @@ repository = "https://gitlab.redox-os.org/redox-os/smallstring"
 description = "'Small string' optimization: store small strings on the stack using smallvec"
 license = "MIT"
 
+[features]
+default = []
+std = []
+
 [dependencies]
-smallvec = "0.6"
+smallvec = { version = "0.6", default-features = false }
