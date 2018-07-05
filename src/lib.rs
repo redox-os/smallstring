@@ -7,11 +7,12 @@ mod std {
     pub use core::*;
 }
 
-use std::str;
+use std::str::{self, Chars};
 use std::ptr;
-use std::ops::{Deref, DerefMut};
+use std::ops::{Deref, DerefMut, RangeBounds};
 use std::borrow::Borrow;
-use std::iter::{FromIterator, IntoIterator};
+use std::iter::{FusedIterator, FromIterator, IntoIterator};
+use std::fmt;
 
 use smallvec::{Array, SmallVec};
 
@@ -161,6 +162,175 @@ impl<'a, B: Array<Item = u8>> SmallString<B> {
     pub fn clear(&mut self) {
         self.buffer.clear()
     }
+
+    /// Extracts a string slice containing the entire string.
+    pub fn as_str(&self) -> &str {
+        self
+    }
+
+    /// Extracts a mutable string slice containing the entire string.
+    pub fn as_mut_str(&mut self) -> &mut str {
+        self
+    }
+
+    /// Consumes the string, turning it into a vector of bytes
+    #[cfg(feature = "std")]
+    pub fn into_bytes(self) -> Vec<u8> {
+        self.buffer.into_vec()
+    }
+
+    /// Returns a byte slice of the string's contents
+    pub fn as_bytes(&self) -> &[u8] {
+        &self.buffer
+    }
+
+    /// Removes a char from this String at a byte position and returns it.
+    ///
+    /// This is an O(n) operation, as it requires copying every element in the
+    /// buffer.
+    ///
+    /// Panics
+    /// ------
+    ///
+    /// Panics if idx is larger than or equal to the String's length, or if it
+    /// does not lie on a char boundary.
+    #[inline]
+    pub fn remove(&mut self, idx: usize) -> char {
+        let ch = match self[idx..].chars().next() {
+            Some(ch) => ch,
+            None => panic!("cannot remove a char from the end of a string"),
+        };
+
+        let next = idx + ch.len_utf8();
+        let len = self.len();
+        unsafe {
+            ptr::copy(self.buffer.as_ptr().offset(next as isize),
+                      self.buffer.as_mut_ptr().offset(idx as isize),
+                      len - next);
+            self.buffer.set_len(len - (next - idx));
+        }
+        ch
+    }
+
+    /// Retains only the characters specified by the predicate.
+    ///
+    /// In other words, remove all characters `c` such that `f(c)` returns `false`.
+    /// This method operates in place and preserves the order of the retained
+    /// characters.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # extern crate smallstring;
+    /// # use smallstring::SmallString;
+    /// # extern crate std;
+    /// let mut s: SmallString<[u8;8]> = SmallString::from("f_o_ob_ar");
+    ///
+    /// s.retain(|c| c != '_');
+    ///
+    /// assert_eq!(s, SmallString::from("foobar"));
+    /// ```
+    #[inline]
+    pub fn retain<F>(&mut self, mut f: F)
+        where F: FnMut(char) -> bool
+    {
+        let len = self.len();
+        let mut del_bytes = 0;
+        let mut idx = 0;
+
+        while idx < len {
+            let ch = unsafe {
+                self.slice_unchecked(idx, len).chars().next().unwrap()
+            };
+            let ch_len = ch.len_utf8();
+
+            if !f(ch) {
+                del_bytes += ch_len;
+            } else if del_bytes > 0 {
+                unsafe {
+                    ptr::copy(self.buffer.as_ptr().offset(idx as isize),
+                              self.buffer.as_mut_ptr().offset((idx - del_bytes) as isize),
+                              ch_len);
+                }
+            }
+
+            // Point idx to the next char
+            idx += ch_len;
+        }
+
+        if del_bytes > 0 {
+            unsafe { self.buffer.set_len(len - del_bytes); }
+        }
+    }
+
+    /// Creates a draining iterator that removes the specified range in the string
+    /// and yields the removed chars.
+    ///
+    /// Note: The element range is removed even if the iterator is not
+    /// consumed until the end.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the starting point or end point do not lie on a [`char`]
+    /// boundary, or if they're out of bounds.
+    ///
+    /// [`char`]: ../../std/primitive.char.html
+    ///
+    /// # Examples
+    ///
+    /// Basic usage:
+    ///
+    /// ```
+    /// # extern crate smallstring;
+    /// # use smallstring::SmallString;
+    /// # extern crate std;
+    /// let mut s: SmallString<[u8;8]> = SmallString::from("α is alpha, β is beta");
+    /// let beta_offset = s.find('β').unwrap_or(s.len());
+    ///
+    /// // Remove the range up until the β from the string
+    /// let t: SmallString = s.drain(..beta_offset).collect();
+    /// assert_eq!(t, SmallString::from("α is alpha, "));
+    /// assert_eq!(s, SmallString::from("β is beta"));
+    ///
+    /// // A full range clears the string
+    /// s.drain(..);
+    /// assert_eq!(s, SmallString::from(""));
+    /// ```
+    pub fn drain<R>(&mut self, range: R) -> Drain<B>
+        where R: RangeBounds<usize>
+    {
+        use std::ops::Bound::*;
+        // Memory safety
+        //
+        // The String version of Drain does not have the memory safety issues
+        // of the vector version. The data is just plain bytes.
+        // Because the range removal happens in Drop, if the Drain iterator is leaked,
+        // the removal will not happen.
+        let len = self.len();
+        let start = match range.start_bound() {
+            Included(&n) => n,
+            Excluded(&n) => n + 1,
+            Unbounded => 0,
+        };
+        let end = match range.end_bound() {
+            Included(&n) => n + 1,
+            Excluded(&n) => n,
+            Unbounded => len,
+        };
+
+        // Take out two simultaneous borrows. The &mut String won't be accessed
+        // until iteration is over, in Drop.
+        let self_ptr = self as *mut _;
+        // slicing does the appropriate bounds checks
+        let chars_iter = self[start..end].chars();
+
+        Drain {
+            start,
+            end,
+            iter: chars_iter,
+            string: self_ptr,
+        }
+    }
 }
 
 impl<B: Array<Item = u8>> std::hash::Hash for SmallString<B> {
@@ -309,3 +479,69 @@ impl<'a, B: Array<Item = u8>> FromIterator<&'a str> for SmallString<B> {
         buf
     }
 }
+
+/// A draining iterator for `SmallString`.
+///
+/// This struct is created by the [`drain`] method on [`SmallString`]. See its
+/// documentation for more.
+///
+/// [`drain`]: struct.SmallString.html#method.drain
+/// [`SmallString`]: struct.SmallString.html
+pub struct Drain<'a, B: Array<Item = u8>> {
+    /// Will be used as &'a mut String in the destructor
+    string: *mut SmallString<B>,
+    /// Start of part to remove
+    start: usize,
+    /// End of part to remove
+    end: usize,
+    /// Current remaining range to remove
+    iter: Chars<'a>,
+}
+
+impl<'a, B: Array<Item = u8>> fmt::Debug for Drain<'a, B> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.pad("Drain { .. }")
+    }
+}
+
+unsafe impl<'a, B: Array<Item = u8>> Sync for Drain<'a, B> {}
+unsafe impl<'a, B: Array<Item = u8>> Send for Drain<'a, B> {}
+
+impl<'a, B: Array<Item = u8>> Drop for Drain<'a, B> {
+    fn drop(&mut self) {
+        unsafe {
+            // "Reaffirm" the bounds checks to avoid panic code being
+            // inserted again.
+            let self_str = &mut (*self.string);
+            if self.start <= self.end && self.end <= self_str.len() {
+                let len = self_str.len();
+                ptr::copy(self_str.buffer.as_ptr().add(self.end),
+                        self_str.buffer.as_mut_ptr().add(self.start),
+                        self.end - self.start);
+                self_str.buffer.set_len(len - (self.end - self.start));
+            }
+        }
+    }
+}
+
+impl<'a, B: Array<Item = u8>> Iterator for Drain<'a, B> {
+    type Item = char;
+
+    #[inline]
+    fn next(&mut self) -> Option<char> {
+        self.iter.next()
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        self.iter.size_hint()
+    }
+}
+
+impl<'a, B: Array<Item = u8>> DoubleEndedIterator for Drain<'a, B> {
+    #[inline]
+    fn next_back(&mut self) -> Option<char> {
+        self.iter.next_back()
+    }
+}
+
+impl<'a, B: Array<Item = u8>> FusedIterator for Drain<'a, B> {}
