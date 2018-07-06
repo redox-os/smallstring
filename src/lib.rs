@@ -478,12 +478,6 @@ impl<B: Array<Item = u8>> From<char> for SmallString<B> {
     }
 }
 
-impl<B: Array<Item = u8>> From<u8> for SmallString<B> {
-    fn from(item: u8) -> Self {
-        SmallString::from(item as char)
-    }
-}
-
 impl<'a, B: Array<Item = u8>> From<&'a [u8]> for SmallString<B> {
     fn from(item: &[u8]) -> Self {
         SmallString {
