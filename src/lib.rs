@@ -470,6 +470,28 @@ impl<B: Array<Item = u8>> From<String> for SmallString<B> {
     }
 }
 
+impl<B: Array<Item = u8>> From<char> for SmallString<B> {
+    fn from(item: char) -> Self {
+        let mut buf = SmallString::new();
+        buf.push(item);
+        buf
+    }
+}
+
+impl<B: Array<Item = u8>> From<u8> for SmallString<B> {
+    fn from(item: u8) -> Self {
+        SmallString::from(item as char)
+    }
+}
+
+impl<'a, B: Array<Item = u8>> From<&'a [u8]> for SmallString<B> {
+    fn from(item: &[u8]) -> Self {
+        SmallString {
+            buffer: SmallVec::from_slice(item)
+        }
+    }
+}
+
 impl<B: Array<Item = u8>> From<SmallString<B>> for String {
     fn from(s: SmallString<B>) -> String {
         unsafe { String::from_utf8_unchecked(s.buffer.into_vec()) }
