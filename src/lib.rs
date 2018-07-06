@@ -27,7 +27,7 @@ use smallvec::{Array, SmallVec};
 #[cfg(feature = "std")]
 use std::ffi::OsStr;
 
-#[derive(Clone, Default)]
+#[derive(Clone, Default, PartialOrd, Ord)]
 pub struct SmallString<B: Array<Item = u8> = [u8; 8]> {
     buffer: SmallVec<B>,
 }
