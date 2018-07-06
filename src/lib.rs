@@ -1,5 +1,6 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #![cfg_attr(not(feature = "std"), feature(alloc))]
+#![cfg_attr(feature = "specialization", feature(specialization))]
 
 extern crate smallvec;
 
@@ -238,7 +239,7 @@ impl<'a, B: Array<Item = u8>> SmallString<B> {
     /// ```
     #[inline]
     pub fn retain<F>(&mut self, mut f: F)
-        where F: FnMut(char) -> bool
+    where F: FnMut(char) -> bool
     {
         let len = self.len();
         let mut del_bytes = 0;
@@ -303,7 +304,7 @@ impl<'a, B: Array<Item = u8>> SmallString<B> {
     /// assert_eq!(s, SmallString::from(""));
     /// ```
     pub fn drain<R>(&mut self, range: R) -> Drain<B>
-        where R: RangeBounds<usize>
+    where R: RangeBounds<usize>
     {
         use std::ops::Bound::*;
         // Memory safety
@@ -536,8 +537,8 @@ impl<'a, B: Array<Item = u8>> Drop for Drain<'a, B> {
             if self.start <= self.end && self.end <= self_str.len() {
                 let len = self_str.len();
                 ptr::copy(self_str.buffer.as_ptr().add(self.end),
-                        self_str.buffer.as_mut_ptr().add(self.start),
-                        self.end - self.start);
+                          self_str.buffer.as_mut_ptr().add(self.start),
+                          self.end - self.start);
                 self_str.buffer.set_len(len - (self.end - self.start));
             }
         }
@@ -565,3 +566,39 @@ impl<'a, B: Array<Item = u8>> DoubleEndedIterator for Drain<'a, B> {
 }
 
 impl<'a, B: Array<Item = u8>> FusedIterator for Drain<'a, B> {}
+
+pub trait ToSmallString {
+    fn to_small_string<B: Array<Item = u8>>(&self) -> SmallString<B>;
+}
+
+#[cfg(feature = "specialization")]
+impl ToSmallString for String {
+    fn to_small_string<B: Array<Item = u8>>(&self) -> SmallString<B> {
+        SmallString::from(self)
+    }
+}
+
+#[cfg(feature = "specialization")]
+impl ToSmallString for str {
+    fn to_small_string<B: Array<Item = u8>>(&self) -> SmallString<B> {
+        SmallString::from(self)
+    }
+}
+
+impl<T> ToSmallString for T
+where T: core::fmt::Display + ?Sized {
+    fn to_small_string<B: Array<Item = u8>>(&self) -> SmallString<B> {
+        use core::fmt::Write;
+        let mut buf = SmallString::new();
+        buf.write_fmt(format_args!("{}", self))
+            .expect("a Display implementation return an error unexpectedly");
+        buf.shrink_to_fit();
+        buf
+    }
+}
+
+impl<B: Array<Item = u8>> core::fmt::Write for SmallString<B> {
+    fn write_str(&mut self, input: &str) -> core::fmt::Result {
+        Ok(self.push_str(input))
+    }
+}
