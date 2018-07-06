@@ -9,6 +9,7 @@ license = "MIT"
 [features]
 default = []
 std = []
+specialization = []
 
 [dependencies]
 smallvec = { version = "0.6", default-features = false }

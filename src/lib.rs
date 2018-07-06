@@ -574,7 +574,7 @@ pub trait ToSmallString {
 #[cfg(feature = "specialization")]
 impl ToSmallString for String {
     fn to_small_string<B: Array<Item = u8>>(&self) -> SmallString<B> {
-        SmallString::from(self)
+        SmallString::from(self.as_str())
     }
 }
 
@@ -586,9 +586,19 @@ impl ToSmallString for str {
 }
 
 impl<T> ToSmallString for T
-where T: core::fmt::Display + ?Sized {
+where T: std::fmt::Display + ?Sized {
+    #[cfg(feature = "specialization")]
+    default fn to_small_string<B: Array<Item = u8>>(&self) -> SmallString<B> {
+        use std::fmt::Write;
+        let mut buf = SmallString::new();
+        buf.write_fmt(format_args!("{}", self))
+            .expect("a Display implementation return an error unexpectedly");
+        buf.shrink_to_fit();
+        buf
+    }
+    #[cfg(not(feature = "specialization"))]
     fn to_small_string<B: Array<Item = u8>>(&self) -> SmallString<B> {
-        use core::fmt::Write;
+        use std::fmt::Write;
         let mut buf = SmallString::new();
         buf.write_fmt(format_args!("{}", self))
             .expect("a Display implementation return an error unexpectedly");
@@ -597,8 +607,8 @@ where T: core::fmt::Display + ?Sized {
     }
 }
 
-impl<B: Array<Item = u8>> core::fmt::Write for SmallString<B> {
-    fn write_str(&mut self, input: &str) -> core::fmt::Result {
+impl<B: Array<Item = u8>> std::fmt::Write for SmallString<B> {
+    fn write_str(&mut self, input: &str) -> std::fmt::Result {
         Ok(self.push_str(input))
     }
 }
